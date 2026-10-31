@@ -3004,6 +3004,13 @@ choice
 	config MIPS_CMDLINE_BUILTIN_EXTEND
 		depends on CMDLINE_BOOL
 		bool "Extend builtin kernel arguments with bootloader arguments"
+
+	config MIPS_CMDLINE_MANGLE
+		depends on USE_OF
+		bool "Use dtb kernel arguments. Append mangled bootloader arguments"
+		help
+		  If a bootloader argument matches a rule in dtb, specific replacement
+		  will be appended
 endchoice
 
 endmenu

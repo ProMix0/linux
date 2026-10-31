@@ -547,6 +547,34 @@ static int __init bootcmdline_scan_chosen(unsigned long node, const char *uname,
 	return 1;
 }
 
+static int __init mangle_bootcmdline(unsigned long node, const char *uname,
+					  int depth, void *data)
+{
+	const char *pattern;
+	const char *replace;
+	const char *match;
+	char buf[32];
+	int l;
+	int i;
+
+	if (depth != 1 ||
+	    (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
+		return 0;
+
+	for (i = 0; i < 10; i++) {
+		snprintf(buf, sizeof(buf), "mangle-bootargs-%d", i);
+		pattern = of_get_flat_dt_prop(node, buf, &l);
+		if (pattern != NULL && l > strlen(pattern) + 1) {
+			replace = pattern + strlen(pattern) + 1;
+			match = strstr(arcs_cmdline, pattern);
+			if (match && (match[strlen(pattern)] == ' ' ||
+			    match[strlen(pattern)] == '\0'))
+				bootcmdline_append(replace, COMMAND_LINE_SIZE);
+		}
+	}
+
+	return 1;
+}
 #endif /* CONFIG_OF_EARLY_FLATTREE */
 
 static void __init bootcmdline_init(void)
@@ -581,27 +609,32 @@ static void __init bootcmdline_init(void)
 	 * now.
 	 */
 	if (IS_ENABLED(CONFIG_MIPS_CMDLINE_FROM_DTB) ||
-	    IS_ENABLED(CONFIG_MIPS_CMDLINE_DTB_EXTEND))
+	    IS_ENABLED(CONFIG_MIPS_CMDLINE_DTB_EXTEND) ||
+	    IS_ENABLED(CONFIG_MIPS_CMDLINE_MANGLE))
 		of_scan_flat_dt(bootcmdline_scan_chosen, &dt_bootargs);
 #endif
 
-	/*
-	 * If we didn't get any arguments from DT (regardless of whether that's
-	 * because we weren't configured to look for them, or because we looked
-	 * & found none) then we'll take arguments from the bootloader.
-	 * plat_mem_setup() should have filled arcs_cmdline with arguments from
-	 * the bootloader.
-	 */
-	if (IS_ENABLED(CONFIG_MIPS_CMDLINE_DTB_EXTEND) || !dt_bootargs)
-		bootcmdline_append(arcs_cmdline, COMMAND_LINE_SIZE);
+	if (IS_ENABLED(CONFIG_MIPS_CMDLINE_MANGLE)) {
+		of_scan_flat_dt(mangle_bootcmdline, NULL);
+	} else {
+		/*
+		 * If we didn't get any arguments from DT (regardless of whether that's
+		 * because we weren't configured to look for them, or because we looked
+		 * & found none) then we'll take arguments from the bootloader.
+		 * plat_mem_setup() should have filled arcs_cmdline with arguments from
+		 * the bootloader.
+		 */
+		if (IS_ENABLED(CONFIG_MIPS_CMDLINE_DTB_EXTEND) || !dt_bootargs)
+			bootcmdline_append(arcs_cmdline, COMMAND_LINE_SIZE);
 
-	/*
-	 * If the user specified a built-in command line & we didn't already
-	 * prepend it, we append it to boot_command_line here.
-	 */
-	if (IS_ENABLED(CONFIG_CMDLINE_BOOL) &&
-	    !IS_ENABLED(CONFIG_MIPS_CMDLINE_BUILTIN_EXTEND))
-		bootcmdline_append(builtin_cmdline, COMMAND_LINE_SIZE);
+		/*
+		 * If the user specified a built-in command line & we didn't already
+		 * prepend it, we append it to boot_command_line here.
+		 */
+		if (IS_ENABLED(CONFIG_CMDLINE_BOOL) &&
+		    !IS_ENABLED(CONFIG_MIPS_CMDLINE_BUILTIN_EXTEND))
+			bootcmdline_append(builtin_cmdline, COMMAND_LINE_SIZE);
+	}
 }
 
 /*
